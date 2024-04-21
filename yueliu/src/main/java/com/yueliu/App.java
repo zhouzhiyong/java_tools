@@ -7,6 +7,9 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.json.JSONObject;
+
 import fi.iki.elonen.NanoHTTPD;
 import com.time.nlp.*;
 import com.time.util.DateUtil;
@@ -74,29 +77,40 @@ public class App extends NanoHTTPD {
     public Response serve(IHTTPSession session) {
         System.err.println("wolaile!!!");
         if (session.getMethod() == Method.POST && session.getUri().equals("/time")) {
-            // 仅处理POST方法和/userinfo端点的请求
             Map<String, String> body = new HashMap<>();
             try {
                 session.parseBody(body);
                 body = session.getParms();
             } catch (IOException e) {
+                System.err.println(e.getMessage());
                 return newFixedLengthResponse("Internal server error while parsing request body: " + e.getMessage());
             } catch (ResponseException e) {
+                System.err.println(e.getMessage());
                 return newFixedLengthResponse("Internal server error: " + e.getMessage());
             }
-
             String test = body.get("content");
-            String t = "";
+            TimeUnit t;
             try {
-                t = getTime(test);
+                t = parseTime(test);
 
             } catch (URISyntaxException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
+                JSONObject errResult = new JSONObject();
+                errResult.put("err", e.getMessage());
+                return newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", errResult.toString());
             }
 
-            // 返回获取的用户信息
-            return newFixedLengthResponse(t);
+            if (t == null) {
+                JSONObject errResult = new JSONObject();
+                errResult.put("err", "null");
+                return newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", errResult.toString());
+            }
+
+            JSONObject result = new JSONObject();
+            result.put("time", t.getTime().getTime());
+            result.put("all_day_time", t.getIsAllDayTime());
+
+            return newFixedLengthResponse(Response.Status.OK, "application/json", result.toString());
         } else {
             // 默认的处理逻辑，返回 HTML 页面
             String msg = "<html><body><h1>Hello server</h1>\n";
@@ -111,9 +125,9 @@ public class App extends NanoHTTPD {
         }
     }
 
-    private String getTime(String content) throws URISyntaxException {
+    private TimeUnit parseTime(String content) throws URISyntaxException {
         URL url = TimeNormalizer.class.getResource("/TimeExp.m");
-        System.out.println(url.toURI().toString());
+        // System.out.println(url.toURI().toString());
         TimeNormalizer normalizer = new TimeNormalizer(url.toURI().toString());
         normalizer.setPreferFuture(true);
 
@@ -121,9 +135,14 @@ public class App extends NanoHTTPD {
         normalizer.parse(content);// 抽取时间
         TimeUnit[] unit = normalizer.getTimeUnit();
         System.out.println(content);
+
+        if (unit.length == 0) {
+            return null;
+        }
+
         System.out.println(DateUtil.formatDateDefault(unit[0].getTime()) + "-" + unit[0].getIsAllDayTime());
 
-        return DateUtil.formatDateDefault(unit[0].getTime());
+        return unit[0];
     }
 
     private void getJsonData(IHTTPSession session) {

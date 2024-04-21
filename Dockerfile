@@ -16,6 +16,10 @@ RUN mvn clean package
 
 # 第二个阶段：使用 OpenJDK 11 作为基础镜像，只复制构建好的JAR文件
 FROM openjdk:11
+
+# 设置时区为东八区
+RUN ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo Asia/Shanghai > /etc/timezone
+
 WORKDIR /app
 COPY --from=builder /app/yueliu/target/yueliu-1.0-SNAPSHOT-jar-with-dependencies.jar /app/yueliu.jar
 CMD ["java", "-jar", "yueliu.jar"]
